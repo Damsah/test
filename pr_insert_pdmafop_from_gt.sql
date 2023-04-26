@@ -1,0 +1,95 @@
+create or replace 
+PROCEDURE pr_insert_pdmafop (p_in_TEST_ID      IN     VARCHAR2,
+                             p_in_process_id    IN     NUMBER,
+                             p_in_chunk_id      IN     NUMBER,
+                             p_out_dml_count      out number,
+                             p_out_err_cd          OUT NUMBER
+                             )
+IS
+   l_insert_str   VARCHAR2 (32767);
+   v_err_retVal   NUMBER;
+   v_context      VARCHAR2 (1000) := NULL;
+  
+BEGIN
+   --    Fields accessed - oidpdmu,universeflg,mafsrc,action,opdate
+   v_context :=
+         'Insert into MAFOP, for process_id and chunk_id:'
+      || p_in_process_id
+      || p_in_chunk_id;
+
+ 
+      
+   l_insert_str :='INSERT INTO '
+    || pv_loader_config_tbl_rec.prdt_schema
+      || '.MAFOP
+      (
+        TEST_ID,
+        PROCESS_ID,
+        CHUNK_ID,
+        OIDPDMU,
+        --UNIVERSEFLG,
+        MAFSRC,
+        ACTION,
+        OPDATE,
+       OPERATION
+        )
+       ( 
+        SELECT
+        :test_id,
+        :process_id,
+        :chunk_id,
+        a_oidmu oidpdmu,      -- OIDPDMU
+        --NULL universeflg,     -- UNIVERSEFLG
+        a_mafsrc,             -- MAFSRC
+        (
+        SUBSTR(MAX(TO_CHAR(a_opdate, ''YYYYMMDD'')||a_collator||a_action),-1,1) 
+        ) action,                -- END ACTION CODES
+        MAX(a_opdate)  opdate,
+        '''||pv_loader_config_tbl_rec.operation||'''
+        FROM
+        (
+         select
+          a.oidmu      a_oidmu,
+           NULL         a_universeflg,
+           a.mafsrc     a_mafsrc,
+           a.unitstat   a_unitstat,
+           a.opdate     a_opdate,
+           a.action     a_action,
+           CASE
+           WHEN ACT.ACTION_RESULT = ''D'' THEN -- Dependency on other columns to determine if Positive or Negative
+           NULL
+           ELSE
+          CASE
+          WHEN ACT.ACTION_RESULT in (''P'',''M'',''N'')  THEN
+          act.action_id||TO_CHAR(a.oidadsrc,''FM00000000000000000000'')
+          ELSE -- Any action that is neither positive nor negative, is assigned the smallest collator prefix
+         ''001''||TO_CHAR(a.oidadsrc,''FM00000000000000000000'')
+          END
+           END a_collator
+           
+      from CENAF.addrsrcrel_gt a,        
+          PDMAF_VIEW.pdb_action_lu          ACT
+          WHERE
+           a.ACTION = ACT.action(+)
+          )
+           GROUP BY a_oidmu, a_mafsrc
+        )'; 
+       
+    EXECUTE IMMEDIATE l_insert_str
+      USING p_in_TEST_ID, p_in_process_id, p_in_chunk_id;
+
+   p_out_dml_count := sql%rowcount;
+   
+   p_out_err_cd := SUCCESS_CD;
+EXCEPTION
+   WHEN OTHERS
+   THEN
+      p_out_err_cd := SQLCODE;
+      v_err_retVal :=
+         fn_log_Error (p_in_err_msg      => SQLERRM,
+                       p_in_context      => v_context,
+                       p_in_op_code      => p_out_err_cd,
+                       p_in_process_id   => p_in_process_id,
+                       p_in_chunk_id     => p_in_chunk_id,
+                       p_in_oidmu        => NULL);
+END pr_insert_pdmafop;
