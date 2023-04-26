@@ -48,7 +48,6 @@ BEGIN
         (
          select
           a.oidmu      a_oidmu,
-           NULL         a_universeflg,
            a.mafsrc     a_mafsrc,
            a.unitstat   a_unitstat,
            a.opdate     a_opdate,

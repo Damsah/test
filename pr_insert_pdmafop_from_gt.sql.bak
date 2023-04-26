@@ -60,8 +60,8 @@ BEGIN
          ''001''||TO_CHAR(a.oidadsrc,''FM00000000000000000000'')
            END a_collator
            
-      from addrsrcrel_gt a,        
-          ref_action_lu         ACT
+      from CENAF.addrsrcrel_gt a,        
+          PDMAF_VIEW.pdb_action_lu          ACT
           WHERE
            a.ACTION = ACT.action(+)
 		   and a.mafsrc NOT IN (SELECT mafsrc FROM REF_EXCLUDED_MAFSRC_LU)
